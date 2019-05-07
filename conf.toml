@@ -1,0 +1,10 @@
+# 数据库配置
+DbHost = "47.97.196.203"
+DbPort = "3306"
+DbDatabase = "go-easy-blog"
+DbUsername = "caojianfei"
+DbPassword = "Caojf@1910"
+
+# jwt secret
+JWTSecret = "0PnXEQDKQ3oo8iF#YY73z9LXQ&Vrqz%T"
+TokenExpire = 86400
