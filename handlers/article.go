@@ -101,7 +101,7 @@ func CreateArticle(w http.ResponseWriter, r *http.Request, params httprouter.Par
 		}
 		rows := strings.Join(values, ",")
 		insertSql += rows
-		_, err = db.Exec(insertSql)
+		_, err = tx.Exec(insertSql)
 		if err != nil {
 			tx.Rollback()
 			log.Errorf("prepare sql error. sql: %s, error: %s", insertSql, err.Error())
@@ -245,7 +245,6 @@ func GetArticle(w http.ResponseWriter, r *http.Request, params httprouter.Params
 	return
 }
 
-
 // 删除文章
 func DeleteArticle(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
 	articleId := params.ByName("id")
@@ -300,5 +299,140 @@ func DeleteArticle(w http.ResponseWriter, r *http.Request, params httprouter.Par
 	}
 
 	response.Success(map[string]string{}, w)
+	return
+}
+
+// 更新文章
+func UpdateArticle(w http.ResponseWriter, r *http.Request, params httprouter.Params) {
+	data := &CreateArticleData{}
+	articleId := params.ByName("id")
+	err := json.NewDecoder(r.Body).Decode(data)
+
+	if err != nil {
+		log.Error("parse request body error. error: %s", err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	// 获取认证token
+	token, err := helpers.GetAuthorizationTokenFormRequestHeader(r)
+	if err != nil {
+		log.Error("get token error. error: %s", err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	// 获取登录的用户id
+	userId, err := helpers.GetUserIdFromAuthorization(token)
+	if err != nil {
+		log.Error("get userId error. error: %s", err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	// 参数校验
+	if data.Title == "" || data.Content == "" {
+		log.Error("缺少参数")
+		response.ParamError(w, "文章标题和内容不能为空")
+		return
+	}
+
+	// 查询文章
+	db := database.New()
+	queryArticleSql := "SELECT `id`, `user_id` FROM articles WHERE id = ? AND deleted_at is not null"
+	stmp, err := db.Prepare(queryArticleSql)
+	if err != nil {
+		log.Errorf("prepare sql error. sql: %s, error: %s", queryArticleSql, err.Error())
+		response.SystemError(w)
+		return
+	}
+	defer stmp.Close()
+
+	var queryArticleId, queryArticleUserId string
+	err = stmp.QueryRow(articleId).Scan(&queryArticleId, &queryArticleId)
+	if err != nil {
+		log.Errorf("query sql error. sql: %s, error: %s", queryArticleSql, err.Error())
+		if err == sql.ErrNoRows {
+			response.BusinessError(w, "文章不存在或已经被删除")
+		} else {
+			response.SystemError(w)
+		}
+		return
+	}
+
+	if queryArticleUserId != userId {
+		response.BusinessError(w, "无权修改")
+		return
+	}
+
+	// 修改文章内容
+	tx, err := db.Begin()
+	if err != nil {
+		log.Errorf("begin transaction error. error: %s", err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	defer tx.Rollback()
+
+	updateArticleSql := "update articles set title = ?, content = ? where id = ?"
+	stmp, err = tx.Prepare(updateArticleSql)
+	if err != nil {
+		log.Errorf("prepare sql error. sql: %s, error: %s", updateArticleSql, err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	_, err = stmp.Exec(data.Title, data.Content, articleId)
+	if err != nil {
+		log.Errorf("update article error. sql: %s, error: %s", updateArticleSql, err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	_ = stmp.Close()
+
+	// 删除文章标签
+	deleteTagsSql := "delete from article_tag where article_id = ?"
+	stmp, err = tx.Prepare(deleteTagsSql)
+	if err != nil {
+		log.Errorf("prepare sql error. sql: %s, error: %s", deleteTagsSql, err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	_, err = stmp.Exec(articleId)
+	if err != nil {
+		log.Errorf("delete article tag error. error: %s", err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	// 文章-标签关联
+	tags := data.Tags
+	if len(tags) > 0 {
+		insertSql := "INSERT INTO article_tag(article_id, tag_id) VALUES"
+		values := make([]string, len(tags))
+		for i := 0; i < len(tags); i++ {
+			values[i] = fmt.Sprintf("(%s, %d)", articleId, tags[i])
+		}
+		rows := strings.Join(values, ",")
+		insertSql += rows
+		_, err = tx.Exec(insertSql)
+		if err != nil {
+			log.Errorf("prepare sql error. sql: %s, error: %s", insertSql, err.Error())
+			response.SystemError(w)
+			return
+		}
+	}
+
+	err = tx.Commit()
+	if err != nil {
+		log.Errorf("transaction commit error. error: %s", err.Error())
+		response.SystemError(w)
+		return
+	}
+
+	response.Success(map[string]interface{}{}, w)
 	return
 }

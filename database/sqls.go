@@ -12,6 +12,4 @@ var (
 
 	CreateNewArticle = "INSERT INTO articles(user_id, title, content, status, created_at, updated_at) VALUES(?, ?, ?, ?, ?, ?)"
 
-	//CreateArticleTagRelation = "INSERT INTO article_tag(article_id, tag_id) VALUES(?, ?)"
-	//QueryArticleById = "select `id`, `user_id`, `title`, "
 )

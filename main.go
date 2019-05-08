@@ -26,15 +26,25 @@ func main() {
 func RegisterRouter() *httprouter.Router {
 	router := httprouter.New()
 	router.GET("/test", middlewares.CheckLogin(TestServer))
-	router.POST("/login",  middlewares.CheckRequest(handlers.Login))
 
-	router.POST("/tag/create", middlewares.CheckLogin(middlewares.CheckRequest(handlers.CreateTag)))// 新增标签
-	router.DELETE("/tag/delete/:id", middlewares.CheckLogin(handlers.DeleteTag))// 删除标签
-	router.GET("/tag/list", middlewares.CheckLogin(handlers.TagList))// 标签列表
+	// 管理员登录
+	router.POST("/admin/login",  middlewares.CheckRequest(handlers.Login))
 
-	router.POST("/article/create", middlewares.CheckLogin(middlewares.CheckRequest(handlers.CreateArticle)))
-	router.GET("/article/:id", middlewares.CheckLogin(handlers.GetArticle))
-	router.DELETE("/article/:id", middlewares.CheckLogin(handlers.DeleteArticle))
+	// 标签管理
+	router.POST("/admin/tag", middlewares.CheckLogin(middlewares.CheckRequest(handlers.CreateTag)))// 新增标签
+	router.DELETE("/admin/tag/:id", middlewares.CheckLogin(handlers.DeleteTag))// 删除标签
+	router.GET("/admin/tag", middlewares.CheckLogin(handlers.TagList))// 标签列表
+
+	// 文章管理
+	router.POST("/admin/article", middlewares.CheckLogin(middlewares.CheckRequest(handlers.CreateArticle)))// 新增文章
+	router.POST("/admin/article/:id", middlewares.CheckLogin(middlewares.CheckRequest(handlers.UpdateArticle)))// 更新文章
+	router.GET("/admin/article/:id", middlewares.CheckLogin(handlers.GetArticle))// 文章详情
+	router.DELETE("/admin/article/:id", middlewares.CheckLogin(handlers.DeleteArticle)) // 删除文章
+
+
+	// 访客路由
+
+
 	return router
 }
 
